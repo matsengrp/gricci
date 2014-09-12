@@ -38,21 +38,30 @@ D=g.distance_matrix(); view(D)
 
 # t=t1/t2 is the lazyness; matrices are multiplied by t2, and by the degrees of source and target, in order to be integer-valued
 # due to linear behaviour for small t, t=1/4 is sufficient here
-t1=1; t2=4; t=t1/t2; p=MixedIntegerLinearProgram(); x=p.new_variable();
-p.set_objective(-p.sum(D[i,j]*x[i,j] for i in [0..N-1] for j in [0..N-1])) # the function to be maximized
+t1=1; t2=4; t=t1/t2
+# Set up linear program.
+p=MixedIntegerLinearProgram()
+# x[i,j] is the amount of mass that goes from i to j.
+# It is constrained to be nonnegative, which gives the only inequalities for our LP.
+x=p.new_variable(nonnegative=True)
+# Maximize the negative of the mass transport.
+p.set_objective(-p.sum(D[i,j]*x[i,j] for i in [0..N-1] for j in [0..N-1]))
 
-# source and target vertices for Ollivier-Ricci, ds,dt their degrees
-# we often choose 0 and 1, except for the snub square where we also pick 1 and 2
+# source and target vertices for Ollivier-Ricci, ds,dt their degrees we often
+# choose 0 and 1, except for the snub square where we also pick 1 and 2
 source=0; target=1; ds=g.degree(source); dt=g.degree(target);
 
-# definition of the random walk from i to j
+# Mass distribution at j (multiplied by t2*ds*dt) of one time-step of a
+# discrete lazy random walk starting at i.
+# This is (a multiple of a) random walk $m$ as defined in Ollivier's paper,
+# where it would be denoted $m_i(j)$.
 def m(i,j):
-    if i==j: return(t2-t1)*ds*dt
+    if i==j: return (t2-t1)*ds*dt
     elif D[i,j]==1: return t1*ds*dt/g.degree(i)
     else: return 0
 
-# adding equality constraints using the random walk
-# inequality constraints are implicit
+# The equality constraints simply state that the mass starts in $m_source$ and
+# finishes in $m_target$.
 for i in [0..N-1]:
      p.add_constraint( p.sum( x[i,j] for j in [0..N-1] ) == m(source,i) )
 for j in [0..N-1]:
