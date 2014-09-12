@@ -31,12 +31,18 @@ R4=Graph({ 0:[1,2,4,6],1:[7,9,11],2:[3,11],4:[3,5],6:[5,7],8:[7,9],10:[9,11]}); 
 R6=Graph({ 0:[1,2,6], 1:[9,13], 2:[3,15], 4:[3,5],6:[5,7],8:[7,9],10:[9,11],12:[11,13],14:[13,15] }); # hexagonal lattice
 # semiregular tilings
 SnubSquare=Graph({ 0:[1,2,3,5,6],1:[2,3,9,10],2:[7,8,12],3:[4,11],5:[4,6],7:[6,12],8:[9,12],10:[9,11]}); # two types of edges: 0-1 between triangles and 1-2 between square and triangle
-g=SnubSquare; N=g.order(); g.show()
+
+g=SnubSquare
+N=g.order()
+
+g.show()
 
 # matrix of distances
-D=g.distance_matrix(); view(D)
+D=g.distance_matrix()
 
-# t=t1/t2 is the lazyness; matrices are multiplied by t2, and by the degrees of source and target, in order to be integer-valued
+view(D)
+
+# t=t1/t2 is the laziness; matrices are multiplied by t2, and by the degrees of source and target, in order to be integer-valued
 # due to linear behaviour for small t, t=1/4 is sufficient here
 t1=1; t2=4; t=t1/t2
 # Set up linear program.
@@ -60,16 +66,26 @@ def m(i,j):
     elif D[i,j]==1: return t1*ds*dt/g.degree(i)
     else: return 0
 
-# The equality constraints simply state that the mass starts in $m_source$ and
-# finishes in $m_target$.
+# The equality constraints simply state that the mass starts in $m_source...
 for i in [0..N-1]:
-     p.add_constraint( p.sum( x[i,j] for j in [0..N-1] ) == m(source,i) )
+    p.add_constraint( p.sum( x[i,j] for j in [0..N-1] ) == m(source,i) )
+# and finishes in $m_target$.
 for j in [0..N-1]:
-     p.add_constraint( p.sum( x[i,j] for i in [0..N-1] ) == m(target,j) )
+    p.add_constraint( p.sum( x[i,j] for i in [0..N-1] ) == m(target,j) )
+
+print [m(source,j) for j in [0..N-1]]
+print [m(target,j) for j in [0..N-1]]
+
+p.solve()
+p.get_values(x)
+{k:v for (k,v) in p.get_values(x).items() if v>0}
 
 # RESULTS
 # cost, kappa(t), ric
-W1=-QQ(p.solve())/(t2*ds*dt); kappa=1-W1; ric=kappa/t; (W1,kappa,ric)
+W1=-QQ(p.solve())/(t2*ds*dt)
+kappa=1-W1
+ric=kappa/t
+(W1,kappa,ric)
 
 # optimal coupling
 X=matrix(QQ,N,N) # preparing for the optimal coupling matrix X
@@ -77,5 +93,5 @@ for i in [0..N-1]: # filling X in
     for j in [0..N-1]:
         X[i,j] = p.get_values(x[i,j])/(t2*ds*dt)
 
-view(X)
+print(X)
 
