@@ -36,8 +36,8 @@ def ollivier(g, source=0, target=1, t1=1, t2=4):
     def mass_vector(i):
         return [QQ(m(i,j))/mass_denominator for j in range(N)]
 
-    print mass_vector(source)
-    print mass_vector(target)
+    # print mass_vector(source)
+    # print mass_vector(target)
 
     # The equality constraints simply state that the mass starts in $m_source...
     for i in range(N):
@@ -48,7 +48,7 @@ def ollivier(g, source=0, target=1, t1=1, t2=4):
 
     p.solve()
     W1=-QQ(p.solve())/mass_denominator
-    kappa=1-W1
+    kappa=1-W1/D[source,target]
     Result = namedtuple('Result',['coupling','W1','kappa','ric'])
     return Result(
         coupling=

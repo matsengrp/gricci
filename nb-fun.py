@@ -1,12 +1,11 @@
 from IPython.display import display, Image
 
-def random_file_path():
-    return "_tmp/"+os.urandom(16).encode('hex')
+# TODO: find better way
+dirname=sage.misc.temporary_file.tmp_dir()
 
-def nb_show(graphics_object,suffix=".png"):
-    name = random_file_path()+suffix
+def nb_show(graphics_object,ext='png'):
+    name = os.path.join(dirname,
+                sage.misc.temporary_file.graphics_filename(ext))
     graphics_object.save(name)
     display(Image(name))
 
-
-# vim:ft=python
