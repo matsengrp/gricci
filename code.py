@@ -1,20 +1,20 @@
 #
-#	SAGE worksheet for computing the Ollivier-Ricci curvature by solving the integer linear problem
-#	
-#	Applies to graphs (a list is provided), defines the random walk, and then the constraints
-#	depending on a lazyness parameter t
-#	returns the cost W1, the fixed t curvature and the asymptotic curvature
+#    SAGE worksheet for computing the Ollivier-Ricci curvature by solving the integer linear problem
 #
-#	It can be adapted to deal with graphs with edges of non constant lengths, 
-#	or to different random walks
+#    Applies to graphs (a list is provided), defines the random walk, and then the constraints
+#    depending on a lazyness parameter t
+#    returns the cost W1, the fixed t curvature and the asymptotic curvature
 #
-#	Pascal Romon 2014 — pascal.romon@u-pem.fr 
+#    It can be adapted to deal with graphs with edges of non constant lengths,
+#    or to different random walks
+#
+#    Pascal Romon 2014 — pascal.romon@u-pem.fr
 #
 
 # Here is a list of graphs
-tetrahedron=Graph({1:[0,2,3], 2:[0,1,3], 3:[1,2,0],  0:[1,2,3]});
+tetrahedron=Graph({2:[0,2,3], 2:[0,1,3], 3:[1,2,0],  0:[1,2,3]});
 cube=graphs.HexahedralGraph();
-cubex=graphs.HexahedralGraph();		# cube with diagonals from 0 and 1 added
+cubex=graphs.HexahedralGraph(); # cube with diagonals from 0 and 1 added
 cubex.add_edges([ (0,2),(0,5),(0,7),(1,3),(1,4),(1,6) ]);
 octahedron=graphs.OctahedralGraph();
 dodecahedron=graphs.DodecahedralGraph();
@@ -27,8 +27,8 @@ G46=Graph({0:[1,2,3,4],1:[0,2,3,5,6,7],2:[0,1,4,7],3:[0,1,4,5],4:[0,2,3],5:[1,3,
 G55=Graph({0:[1,2,3,4,5],1:[0,2,3,6,7],2:[0,1,4,7],3:[0,1,5,6],4:[0,2,5],5:[0,3,4],6:[1,3,7],7:[1,2,6]});
 G56=Graph({0:[1,2,3,4,5],1:[0,2,3,6,7,8],2:[0,1,4,8],3:[0,1,5,6],4:[0,2,5],5:[0,3,4],6:[1,3,7],7:[1,6,8],8:[1,2,7]});
 # regular tilings
-R4=Graph({ 0:[1,2,4,6],1:[7,9,11],2:[3,11],4:[3,5],6:[5,7],8:[7,9],10:[9,11]});    # square lattice
-R6=Graph({ 0:[1,2,6], 1:[9,13], 2:[3,15], 4:[3,5],6:[5,7],8:[7,9],10:[9,11],12:[11,13],14:[13,15] });    # hexagonal lattice
+R4=Graph({ 0:[1,2,4,6],1:[7,9,11],2:[3,11],4:[3,5],6:[5,7],8:[7,9],10:[9,11]}); # square lattice
+R6=Graph({ 0:[1,2,6], 1:[9,13], 2:[3,15], 4:[3,5],6:[5,7],8:[7,9],10:[9,11],12:[11,13],14:[13,15] }); # hexagonal lattice
 # semiregular tilings
 SnubSquare=Graph({ 0:[1,2,3,5,6],1:[2,3,9,10],2:[7,8,12],3:[4,11],5:[4,6],7:[6,12],8:[9,12],10:[9,11]}); # two types of edges: 0-1 between triangles and 1-2 between square and triangle
 g=SnubSquare; N=g.order(); g.show()
@@ -47,26 +47,26 @@ source=0; target=1; ds=g.degree(source); dt=g.degree(target);
 
 # definition of the random walk from i to j
 def m(i,j):
-...       if i==j: return(t2-t1)*ds*dt
-...       elif D[i,j]==1: return t1*ds*dt/g.degree(i)
-...       else: return 0
+    if i==j: return(t2-t1)*ds*dt
+    elif D[i,j]==1: return t1*ds*dt/g.degree(i)
+    else: return 0
 
 # adding equality constraints using the random walk
 # inequality constraints are implicit
-for i in [0..N-1]: 
-...       p.add_constraint( p.sum( x[i,j] for j in [0..N-1] ) == m(source,i) )
-for j in [0..N-1]: 
-...       p.add_constraint( p.sum( x[i,j] for i in [0..N-1] ) == m(target,j) )
+for i in [0..N-1]:
+     p.add_constraint( p.sum( x[i,j] for j in [0..N-1] ) == m(source,i) )
+for j in [0..N-1]:
+     p.add_constraint( p.sum( x[i,j] for i in [0..N-1] ) == m(target,j) )
 
 # RESULTS
 # cost, kappa(t), ric
-W1=-QQ(p.solve())/(t2*ds*dt); kappa=1-W1; ric=kappa/t; (W1,kappa,ric) 
+W1=-QQ(p.solve())/(t2*ds*dt); kappa=1-W1; ric=kappa/t; (W1,kappa,ric)
 
 # optimal coupling
-X=matrix(QQ,N,N)    # preparing for the optimal coupling matrix X
-for i in [0..N-1]:        # filling X in
-...       for j in [0..N-1]:
-...           X[i,j] = p.get_values(x[i,j])/(t2*ds*dt)
-...
+X=matrix(QQ,N,N) # preparing for the optimal coupling matrix X
+for i in [0..N-1]: # filling X in
+    for j in [0..N-1]:
+        X[i,j] = p.get_values(x[i,j])/(t2*ds*dt)
+
 view(X)
 
