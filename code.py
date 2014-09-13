@@ -58,3 +58,16 @@ def ollivier(g, source=0, target=1, t1=1, t2=4):
         kappa=kappa,
         ric=QQ(kappa/t))
 
+
+def ricci_list(g, pair_list):
+    return[(s,t,ollivier(g,source=s,target=t).ric) for (s,t) in pair_list]
+
+def ricci_matrix(g):
+    N = g.num_verts()
+    m = matrix(QQ,N)
+    for i in range(N):
+        for j in range(i+1,N):
+            r = ollivier(g,source=i,target=j).ric
+            m[i,j] = r
+            m[j,i] = r
+    return m
