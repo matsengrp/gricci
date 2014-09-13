@@ -1,22 +1,30 @@
-# SAGE functions for computing the Ollivier-Ricci curvature by solving the
-# integer linear problem.
-#
-# Original code by Pascal Romon 2014 (pascal.romon@u-pem.fr)
-# Tidied and wrapped by Erick Matsen 2014 (http://matsen.fhcrc.org/)
+"""
+SAGE functions for computing the Ollivier-Ricci curvature by solving the
+integer linear problem.
+
+Original code by Pascal Romon 2014 (pascal.romon@u-pem.fr)
+Tidied and wrapped by Erick Matsen 2014 (http://matsen.fhcrc.org/)
+"""
 
 from sage.all import QQ, MixedIntegerLinearProgram, matrix
 from collections import namedtuple
 
 
-# due to linear behaviour for small t, t=1/4 is sufficient here
-def ollivier(g, source=0, target=1, t1=1, t2=4):
+def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
+    """
+    Calculate the Ollivier-Ricci curvature for vertices source and target of
+    graph g under the standard random walk (selecting moves uniformly).
+    t1 and t2 are the numerator and denominator of t; due to linear behaviour
+    for small t, t=1/4 is sufficient here.
+    """
     N = g.order()
     D = g.distance_matrix()
     ds = g.degree(source)
     dt = g.degree(target)
-    # t=t1/t2 is the laziness
+    # t=t1/t2 is the laziness.
     t = float(t1)/t2
-    # matrices are multiplied by mass_denominator in order to be integer-valued
+    # Matrices are multiplied by mass_denominator in order to be
+    # integer-valued.
     mass_denominator = t2*ds*dt
     # Set up linear program.
     p = MixedIntegerLinearProgram()
@@ -40,11 +48,9 @@ def ollivier(g, source=0, target=1, t1=1, t2=4):
         else:
             return 0
 
+    # Just handy for taking a look.
     def mass_vector(i):
         return [QQ(m(i, j))/mass_denominator for j in range(N)]
-
-    # print mass_vector(source)
-    # print mass_vector(target)
 
     # The equality constraints simply state that the mass starts in
     # $m_source...
@@ -68,7 +74,8 @@ def ollivier(g, source=0, target=1, t1=1, t2=4):
 
 
 def ricci_list(g, pair_list):
-    return[(s, t, ollivier(g, source=s, target=t).ric) for (s, t) in pair_list]
+    return[(s, t, ric_unif_rw(g, source=s, target=t).ric)
+           for (s, t) in pair_list]
 
 
 def ricci_matrix(g):
@@ -76,7 +83,7 @@ def ricci_matrix(g):
     m = matrix(QQ, N)
     for i in range(N):
         for j in range(i+1, N):
-            r = ollivier(g, source=i, target=j).ric
+            r = ric_unif_rw(g, source=i, target=j).ric
             m[i, j] = r
             m[j, i] = r
     return m
