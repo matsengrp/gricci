@@ -1,9 +1,13 @@
 import csv
+import os
 from IPython.display import display, Image
-from sage.matrix.constructor import MatrixFactory
+from sage.matrix.constructor import Matrix
+from sage.misc.temporary_file import tmp_dir, graphics_filename
 
-# TODO: find better way
-dirname=sage.misc.temporary_file.tmp_dir()
+
+# TODO: find better way than defining a global
+dirname = tmp_dir()
+
 
 def nb_show(graphics_object,ext='png'):
     name = os.path.join(dirname,
@@ -11,7 +15,6 @@ def nb_show(graphics_object,ext='png'):
     graphics_object.save(name)
     display(Image(name))
 
-#def arr_arr_of_csv(fname):
 def matrix_of_csv(fname):
     with open(fname, 'rb') as csvfile:
         mreader = csv.reader(csvfile, delimiter=',', quotechar="'")
@@ -21,7 +24,7 @@ def mtx_to_dict(m, keys=None):
     d = {}
     if keys == None or len(keys) != m.nrows():
         keys = range(m.nrows())
-    
+
     for i in range(m.nrows()):
         d[keys[i]] = []
         for j in range(m.ncols()):
