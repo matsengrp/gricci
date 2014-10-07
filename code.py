@@ -63,11 +63,12 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
     p.solve()
     W1 = -QQ(p.solve())/mass_denominator
     kappa = 1 - W1/D[source, target]
-    Result = namedtuple('Result', ['coupling', 'W1', 'kappa', 'ric'])
+    Result = namedtuple('Result', ['coupling', 'dist', 'W1', 'kappa', 'ric'])
     return Result(
         coupling={
             k: QQ(v/mass_denominator)
             for (k, v) in p.get_values(x).items() if v > 0},
+        dist=D[source, target],
         W1=W1,
         kappa=kappa,
         ric=QQ(kappa/t))
