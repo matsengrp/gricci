@@ -3,11 +3,11 @@ SAGE functions for computing the Ollivier-Ricci curvature by solving the
 integer linear problem.
 
 Original code by Pascal Romon 2014 (pascal.romon@u-pem.fr)
-Tidied and wrapped by Erick Matsen 2014 (http://matsen.fhcrc.org/)
+Tidied, wrapped and made faster by Erick Matsen 2014 (http://matsen.fhcrc.org/)
 """
 
-from sage.all import QQ, MixedIntegerLinearProgram, matrix
-from collections import namedtuple
+from sage.all import QQ, ZZ, MixedIntegerLinearProgram, matrix
+from collections import OrderedDict, namedtuple
 
 
 def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
@@ -17,8 +17,21 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
     t1 and t2 are the numerator and denominator of t; due to linear behaviour
     for small t, t=1/4 is sufficient here.
     """
-    N = g.order()
-    D = g.distance_matrix()
+
+    d = OrderedDict.fromkeys(
+        [source, target] +
+        list(g.neighbor_iterator(source)) +
+        list(g.neighbor_iterator(target)))
+    # relevant_verts will have unique items starting with source, then target,
+    # then the neighbors of source and target.
+    relevant_verts = d.keys()
+    N = len(relevant_verts)
+    D = matrix(ZZ, N, N)
+    for i in range(N):
+        for j in range(i, N):
+            dist = g.distance(relevant_verts[i], relevant_verts[j])
+            D[i, j] = dist
+            D[j, i] = dist
     ds = g.degree(source)
     dt = g.degree(target)
     # t=t1/t2 is the laziness.
@@ -28,6 +41,8 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
     mass_denominator = t2*ds*dt
     # Set up linear program.
     p = MixedIntegerLinearProgram()
+    # Note that here and in what follows, i and j are used as the vertices that
+    # correspond to relevant_verts[i] and relevant_verts[j].
     # x[i,j] is the amount of mass that goes from i to j.
     # It is constrained to be nonnegative, which are the only inequalities for
     # our LP.
@@ -44,7 +59,7 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
         if i == j:
             return (t2-t1)*ds*dt
         elif D[i, j] == 1:
-            return t1*ds*dt/g.degree(i)
+            return t1*ds*dt/g.degree(relevant_verts[i])
         else:
             return 0
 
@@ -53,22 +68,25 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
         return [QQ(m(i, j))/mass_denominator for j in range(N)]
 
     # The equality constraints simply state that the mass starts in
-    # $m_source...
+    # m_source, which is relevant_verts[0]...
     for i in range(N):
-        p.add_constraint(p.sum(x[i, j] for j in range(N)) == m(source, i))
-    # and finishes in $m_target$.
+        p.add_constraint(p.sum(x[i, j] for j in range(N)) == m(0, i))
+    # and finishes in m_target, which is relevant_verts[1].
     for j in range(N):
-        p.add_constraint(p.sum(x[i, j] for i in range(N)) == m(target, j))
+        p.add_constraint(p.sum(x[i, j] for i in range(N)) == m(1, j))
 
     p.solve()
     W1 = -QQ(p.solve())/mass_denominator
-    kappa = 1 - W1/D[source, target]
-    Result = namedtuple('Result', ['coupling', 'dist', 'W1', 'kappa', 'ric'])
+    # Below D[0, 1] is Dist(source, target) by def of relevant_verts.
+    kappa = 1 - W1/D[0, 1]
+    Result = namedtuple('Result',
+                        ['verts', 'coupling', 'dist', 'W1', 'kappa', 'ric'])
     return Result(
+        verts=relevant_verts,
         coupling={
             k: QQ(v/mass_denominator)
             for (k, v) in p.get_values(x).items() if v > 0},
-        dist=D[source, target],
+        dist=D[0, 1],
         W1=W1,
         kappa=kappa,
         ric=QQ(kappa/t))
