@@ -6,7 +6,7 @@ Original code by Pascal Romon 2014 (pascal.romon@u-pem.fr)
 Tidied and wrapped by Erick Matsen 2014 (http://matsen.fhcrc.org/)
 """
 
-from sage.all import QQ, MixedIntegerLinearProgram, matrix
+from sage.all import RDF, MixedIntegerLinearProgram, matrix
 from collections import namedtuple
 
 
@@ -31,7 +31,7 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
     # x[i,j] is the amount of mass that goes from i to j.
     # It is constrained to be nonnegative, which are the only inequalities for
     # our LP.
-    x = p.new_variable(nonnegative=True)
+    x = p.new_variable(real=True, nonnegative=True)
     # Maximize the negative of the mass transport.
     p.set_objective(
         -p.sum(D[i, j]*x[i, j] for i in range(N) for j in range(N)))
@@ -50,7 +50,7 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
 
     # Just handy for taking a look.
     def mass_vector(i):
-        return [QQ(m(i, j))/mass_denominator for j in range(N)]
+        return [m(i, j)/mass_denominator for j in range(N)]
 
     # The equality constraints simply state that the mass starts in
     # $m_source...
@@ -61,17 +61,17 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
         p.add_constraint(p.sum(x[i, j] for i in range(N)) == m(target, j))
 
     p.solve()
-    W1 = -QQ(p.solve())/mass_denominator
+    W1 = -p.solve()/mass_denominator
     kappa = 1 - W1/D[source, target]
     Result = namedtuple('Result', ['coupling', 'dist', 'W1', 'kappa', 'ric'])
     return Result(
         coupling={
-            k: QQ(v/mass_denominator)
+            k: v/mass_denominator
             for (k, v) in p.get_values(x).items() if v > 0},
         dist=D[source, target],
         W1=W1,
         kappa=kappa,
-        ric=QQ(kappa/t))
+        ric=kappa/t)
 
 
 def ricci_list(g, pair_list):
@@ -81,7 +81,7 @@ def ricci_list(g, pair_list):
 
 def ricci_matrix(g):
     N = g.num_verts()
-    m = matrix(QQ, N)
+    m = matrix(RDF, N)
     for i in range(N):
         for j in range(i+1, N):
             r = ric_unif_rw(g, source=i, target=j).ric
