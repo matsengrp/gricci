@@ -7,7 +7,7 @@ Ollivier Y (2009) Ricci curvature of Markov chains on metric spaces.
 J Funct Anal 256: 810–864.
 
 Original code by Pascal Romon 2014 (pascal.romon@u-pem.fr)
-Tidied, wrapped, generalized, and made faster by Erick Matsen 2014
+Tidied, wrapped, and made faster by Erick Matsen 2014-2015
 (http://matsen.fredhutch.org/)
 """
 
@@ -47,17 +47,6 @@ def ric_unif_rw(g, source=0, target=1, pm1=1, pm2=4):
     # Matrices are multiplied by mass_denominator in order to be
     # integer-valued.
     mass_denominator = pm2*ds*dt
-    # Set up linear program.
-    p = MixedIntegerLinearProgram()
-    # Note that here and in what follows, i and j are used as the vertices that
-    # correspond to relevant_verts[i] and relevant_verts[j].
-    # x[i,j] is the amount of mass that goes from i to j.
-    # It is constrained to be nonnegative, which are the only inequalities for
-    # our LP.
-    x = p.new_variable(nonnegative=True)
-    # Maximize the negative of the mass transport.
-    p.set_objective(
-        -p.sum(D[i, j]*x[i, j] for i in range(N) for j in range(N)))
 
     # Mass distribution at j (multiplied by pm2*ds*dt) of one time-step of a
     # discrete lazy random walk starting at i.
@@ -75,6 +64,17 @@ def ric_unif_rw(g, source=0, target=1, pm1=1, pm2=4):
     def mass_vector(i):
         return [QQ(m(i, j))/mass_denominator for j in range(N)]
 
+    # Set up linear program.
+    p = MixedIntegerLinearProgram()
+    # Note that here and in what follows, i and j are used as the vertices that
+    # correspond to relevant_verts[i] and relevant_verts[j].
+    # x[i,j] is the amount of mass that goes from i to j.
+    # It is constrained to be nonnegative, which are the only inequalities for
+    # our LP.
+    x = p.new_variable(nonnegative=True)
+    # Maximize the negative of the mass transport.
+    p.set_objective(
+        -p.sum(D[i, j]*x[i, j] for i in range(N) for j in range(N)))
     # The equality constraints simply state that the mass starts in
     # m_source, which is relevant_verts[0]...
     for i in range(N):
