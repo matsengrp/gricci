@@ -1,21 +1,29 @@
 """
-SAGE functions for computing the Ollivier-Ricci curvature by solving the
-integer linear problem.
+SAGE functions for computing the Ollivier-Ricci curvature on graphs by solving
+the corresponding integer linear problem.
+
+Reference:
+Ollivier Y (2009) Ricci curvature of Markov chains on metric spaces.
+J Funct Anal 256: 810–864.
 
 Original code by Pascal Romon 2014 (pascal.romon@u-pem.fr)
-Tidied, wrapped and made faster by Erick Matsen 2014 (http://matsen.fhcrc.org/)
+Tidied, wrapped, generalized, and made faster by Erick Matsen 2014
+(http://matsen.fredhutch.org/)
 """
 
 from sage.all import QQ, ZZ, MixedIntegerLinearProgram, matrix
 from collections import OrderedDict, namedtuple
 
 
-def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
+def ric_unif_rw(g, source=0, target=1, pm1=1, pm2=4):
     """
     Calculate the Ollivier-Ricci curvature for vertices source and target of
-    graph g under the standard random walk (selecting moves uniformly).
-    t1 and t2 are the numerator and denominator of t; due to linear behaviour
-    for small t, t=1/4 is sufficient here.
+    graph g under the standard lazy random walk with probability of movement
+    pm=pm1/pm2 (expressed as rational to keep results rational).
+    The results are reported in an ordered tuple including entries 'kappa',
+    which is the coarse Ricci curvature as defined in Ollivier (2009), and
+    'ric', which is kappa divided by pm. This normalized version only depends
+    on the graph.
     """
 
     d = OrderedDict.fromkeys(
@@ -34,11 +42,11 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
             D[j, i] = dist
     ds = g.degree(source)
     dt = g.degree(target)
-    # t=t1/t2 is the laziness.
-    t = float(t1)/t2
+    # pm=pm1/pm2 is the probability of movement.
+    pm = float(pm1)/pm2
     # Matrices are multiplied by mass_denominator in order to be
     # integer-valued.
-    mass_denominator = t2*ds*dt
+    mass_denominator = pm2*ds*dt
     # Set up linear program.
     p = MixedIntegerLinearProgram()
     # Note that here and in what follows, i and j are used as the vertices that
@@ -51,15 +59,15 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
     p.set_objective(
         -p.sum(D[i, j]*x[i, j] for i in range(N) for j in range(N)))
 
-    # Mass distribution at j (multiplied by t2*ds*dt) of one time-step of a
+    # Mass distribution at j (multiplied by pm2*ds*dt) of one time-step of a
     # discrete lazy random walk starting at i.
     # This is (a multiple of a) random walk $m$ as defined in Ollivier's paper,
     # where it would be denoted $m_i(j)$.
     def m(i, j):
         if i == j:
-            return (t2-t1)*ds*dt
+            return (pm2-pm1)*ds*dt
         elif D[i, j] == 1:
-            return t1*ds*dt/g.degree(relevant_verts[i])
+            return pm1*ds*dt/g.degree(relevant_verts[i])
         else:
             return 0
 
@@ -89,7 +97,7 @@ def ric_unif_rw(g, source=0, target=1, t1=1, t2=4):
         dist=D[0, 1],
         W1=W1,
         kappa=kappa,
-        ric=QQ(kappa/t))
+        ric=QQ(kappa/pm))
 
 
 def ricci_list(g, pair_list):
