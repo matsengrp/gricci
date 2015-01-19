@@ -11,7 +11,7 @@ Tidied, wrapped, generalized and made faster by Erick Matsen 2014-2015
 (http://matsen.fredhutch.org/)
 """
 
-from sage.all import QQ, ZZ, MixedIntegerLinearProgram, matrix
+from sage.all import QQ, ZZ, MixedIntegerLinearProgram, matrix, LCM
 from collections import OrderedDict, namedtuple
 
 
@@ -83,30 +83,45 @@ def ricci(walk, g, source=0, target=1, verbose=False):
     # uniform neighbor y. Uniform-prior MH ratio for proposing a move from x to
     # y is min[1, (g(y -> x) / g(x -> y))] In our case, g(y -> x) = 1/d(y) and
     # g(x -> y) = 1/d(x) giving MH ratio min[1, d(x) / d(y)]. Thus we always
-    # move to a higher degree node, and sometimes to a lower. The amount of
-    # mass moving from x to a neighboring y is min[1, d(x) / d(y)] / d(x). We
-    # can then keep things integral by multiplying by d(x) d(y), such that mass
-    # movement is min[d(x), d(y)], and the amount of mass that stays put is
-    # d(x) d(y) - sum_z min[d(x), d(z)] where z ranges over the neighbors of x.
-    # For example, no mass stays put if every neighbor of x has higher degree.
+    # move to a lower degree node, and sometimes to a higher. For example, no
+    # mass stays put if every neighbor of x has lower degree. The amount of
+    # mass moving from x to a neighboring y is
+    # min[1, d(x) / d(y)] / d(x)  (*)
+    # and the amount of mass that stays put is
+    # 1 - sum_z min[1, d(x) / d(z)] / d(x)
+    # where z ranges over the neighbors of x.
+    #
 
-# NOTE: below does not yet reflect the above.
+    def careful_div(i, j):
+        assert(i >= j and i % j == 0)
+        return int(i/j)
 
     def m_unif_prior_mh(x, y):
         """
         This function assumes that x is either source or target.
         """
         assert(x == source or x == target)
-        # rn is for "remaining numerator" when we multiply the ratio by
-        # mass_denominator. The rest gets absorbed into the calculation as
-        # described just above.
-        rn = ds*ds if x == target else dt*dt
         dx = g.degree(x)
+        dy = g.degree(y)
+
+        # Mass movement (times mass_denominator) when x and y are neighbors.
+        # Let lcm = the least common multiple of degrees of the relevant nodes.
+        # Multiplying (*) above by ds*dt*lcm, we get the amount of mass moving
+        # from x to y as
+        # (ds * dt / d(x)) min[lcm, d(x) * lcm / d(y)],
+        # both terms of which are integral.
+        def neighbor_mass_movement(x, y):
+            assert g.has_edge(x, y)
+            return careful_div(dsdt, dx) * min(lcm, careful_div(dx*lcm, dy))
+
         if x == y:
-            tot = sum(min(dx, g.degree(z)) for z in g.neighbor_iterator(x))
-            return rn*(dx*dx - tot)
+            tot = sum(
+                neighbor_mass_movement(x, z)
+                for z in g.neighbor_iterator(x))
+            print "infun", [(x, z, neighbor_mass_movement(x, z)) for z in g.neighbor_iterator(x)]
+            return mass_denominator - tot
         elif g.has_edge(x, y):
-            return rn*min(dx, g.degree(y))
+            return neighbor_mass_movement(x, y)
         else:
             return 0
 
@@ -114,13 +129,22 @@ def ricci(walk, g, source=0, target=1, verbose=False):
         # In the above, we don't know what x is a priori (it could be either
         # source or target), so we multiply the amount of mass by the product
         # of both squares:
-        mass_denominator = ds*ds*dt*dt
         m = m_unif_prior_mh
+        dsdt = ds*dt
+        lcm = LCM([g.degree(z) for z in relevant_verts])
+        mass_denominator = ds*dt*lcm
 
-    # Just handy for taking a look.
+    # XXX this is the puzzling part: it works when calling the function from outside,
+    # but not from inside.
+    print m_unif_prior_mh(0, 0)
+    print m_unif_prior_mh(0, 1)
+    print "qqewqd", [(QQ(m_unif_prior_mh(0, y))/mass_denominator) for y in g.neighbor_iterator(0)]
+
+    # Just handy for taking a look at the mass coming from a node x.
     def mass_vector(x):
         v = [(y, QQ(m(x, y))/mass_denominator) for y in relevant_verts]
-        return [(xm, mass) for (xm, mass) in v if mass > 0]
+        return v
+        #return [(ym, mass) for (ym, mass) in v if mass > 0]
     if verbose:
         print "source mass: ", mass_vector(source)
         print "target mass: ", mass_vector(target)
@@ -136,17 +160,21 @@ def ricci(walk, g, source=0, target=1, verbose=False):
     # Maximize the negative of the mass transport.
     p.set_objective(
         -p.sum(D[i, j]*a[i, j] for i in range(N) for j in range(N)))
+    tot_mass = 0
     # The equality constraints simply state that the mass starts in the places
     # it has diffused to from source...
     for i in range(N):
-        p.add_constraint(
-            p.sum(a[i, j] for j in range(N)) ==
-            m(source, relevant_verts[i]))
+        mass = m(source, relevant_verts[i])
+        tot_mass += mass
+        p.add_constraint(p.sum(a[i, j] for j in range(N)) == mass)
+    assert(tot_mass == mass_denominator)
+    tot_mass = 0
     # and finishes in the places it has diffused to from target.
     for j in range(N):
-        p.add_constraint(
-            p.sum(a[i, j] for i in range(N)) ==
-            m(target, relevant_verts[j]))
+        mass = m(target, relevant_verts[j])
+        tot_mass += mass
+        p.add_constraint(p.sum(a[i, j] for i in range(N)) == mass)
+    assert(tot_mass == mass_denominator)
 
     def relevant_vert_pair_labels(src, dst):
         return (relevant_verts[src], relevant_verts[dst])
