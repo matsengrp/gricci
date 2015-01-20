@@ -14,32 +14,21 @@ Tidied, wrapped, generalized and made faster by Erick Matsen 2014-2015
 from sage.all import QQ, ZZ, MixedIntegerLinearProgram, matrix, LCM
 from collections import OrderedDict, namedtuple
 
+Problem = namedtuple(
+    'Problem',
+    ['src', 'm_src', 'tgt', 'm_tgt', 'denom'])
 
-def ricci(walk, g, source=0, target=1, verbose=False):
-    """
-    Calculate the coarse Ollivier-Ricci curvature for vertices source and
-    target of graph g. There are two options: lazy_unif and unif_prior_mh.
+Result = namedtuple(
+    'Result',
+    ['verts', 'coupling', 'dist', 'W1', 'kappa', 'ric'])
 
-    Under `lazy_unif`, we use the lazy random walk with probability of movement
-    pm=pm1/pm2 (expressed as rational to keep results rational).
-    The results are reported in an ordered tuple including entries `kappa`,
-    which is the coarse Ricci curvature as defined in Ollivier (2009), and
-    `ric`, which is kappa divided by pm. This normalized version only depends
-    on the graph.
 
-    Under `unif_prior_mh`, we use the the Metropolis-Hastings setup for the
-    uniform prior on nodes. There are no free parameters, so in this case we
-    just take `ric` to be `kappa`.
-    """
-
-    # Yes, this will become an Enum when they are available.
-    assert(walk == 'lazy_unif' or walk == 'unif_prior_mh')
-
+def ricci_gen(g, problem):
     # Use an OrderedDict to get uniques but preserve order.
     d = OrderedDict.fromkeys(
-        [source, target] +
-        list(g.neighbor_iterator(source)) +
-        list(g.neighbor_iterator(target)))
+        [problem.src, problem.tgt] +
+        list(g.neighbor_iterator(problem.src)) +
+        list(g.neighbor_iterator(problem.tgt)))
     # relevant_verts will have unique items starting with source, then target,
     # then the neighbors of source and target.
     relevant_verts = d.keys()
@@ -50,104 +39,9 @@ def ricci(walk, g, source=0, target=1, verbose=False):
             dist = g.distance(relevant_verts[i], relevant_verts[j])
             D[i, j] = dist
             D[j, i] = dist
-    ds = g.degree(source)
-    dt = g.degree(target)
 
-    # -- lazy_unif --
-
-    # Mass distribution at y (multiplied by pm2*ds*dt) of one time-step of a
-    # discrete lazy random walk starting at x.
-    # This is (a multiple of a) random walk $m$ as defined in Ollivier's paper,
-    # where it would be denoted $m_x(y)$.
-    def m_lazy_unif(x, y):
-        if x == y:
-            return (pm2-pm1)*ds*dt
-        elif g.has_edge(x, y):
-            # Note that g.degree(x) is either ds or dt.
-            return pm1*ds*dt/g.degree(x)
-        else:
-            return 0
-
-    if walk == 'lazy_unif':
-        # pm=pm1/pm2 is the probability of movement.
-        pm1 = 1
-        pm2 = 4
-        # Matrices are multiplied by mass_denominator in order to be
-        # integer-valued.
-        mass_denominator = pm2*ds*dt
-        m = m_lazy_unif
-
-    # -- unif_prior_mh --
-
-    # Mass transport from a vertex x works as follows: From x, propose a
-    # uniform neighbor y. Uniform-prior MH ratio for proposing a move from x to
-    # y is min[1, (g(y -> x) / g(x -> y))] In our case, g(y -> x) = 1/d(y) and
-    # g(x -> y) = 1/d(x) giving MH ratio min[1, d(x) / d(y)]. Thus we always
-    # move to a lower degree node, and sometimes to a higher. For example, no
-    # mass stays put if every neighbor of x has lower degree. The amount of
-    # mass moving from x to a neighboring y is
-    # min[1, d(x) / d(y)] / d(x)  (*)
-    # and the amount of mass that stays put is
-    # 1 - sum_z min[1, d(x) / d(z)] / d(x)
-    # where z ranges over the neighbors of x.
-    #
-
-    def careful_div(i, j):
-        assert(i >= j and i % j == 0)
-        return int(i/j)
-
-    def m_unif_prior_mh(x, y):
-        """
-        This function assumes that x is either source or target.
-        """
-        assert(x == source or x == target)
-        dx = g.degree(x)
-        dy = g.degree(y)
-
-        # Mass movement (times mass_denominator) when x and y are neighbors.
-        # Let lcm = the least common multiple of degrees of the relevant nodes.
-        # Multiplying (*) above by ds*dt*lcm, we get the amount of mass moving
-        # from x to y as
-        # (ds * dt / d(x)) min[lcm, d(x) * lcm / d(y)],
-        # both terms of which are integral.
-        def neighbor_mass_movement(x, y):
-            assert g.has_edge(x, y)
-            return careful_div(dsdt, dx) * min(lcm, careful_div(dx*lcm, dy))
-
-        if x == y:
-            tot = sum(
-                neighbor_mass_movement(x, z)
-                for z in g.neighbor_iterator(x))
-            print "infun", [(x, z, neighbor_mass_movement(x, z)) for z in g.neighbor_iterator(x)]
-            return mass_denominator - tot
-        elif g.has_edge(x, y):
-            return neighbor_mass_movement(x, y)
-        else:
-            return 0
-
-    if walk == 'unif_prior_mh':
-        # In the above, we don't know what x is a priori (it could be either
-        # source or target), so we multiply the amount of mass by the product
-        # of both squares:
-        m = m_unif_prior_mh
-        dsdt = ds*dt
-        lcm = LCM([g.degree(z) for z in relevant_verts])
-        mass_denominator = ds*dt*lcm
-
-    # XXX this is the puzzling part: it works when calling the function from outside,
-    # but not from inside.
-    print m_unif_prior_mh(0, 0)
-    print m_unif_prior_mh(0, 1)
-    print "qqewqd", [(QQ(m_unif_prior_mh(0, y))/mass_denominator) for y in g.neighbor_iterator(0)]
-
-    # Just handy for taking a look at the mass coming from a node x.
-    def mass_vector(x):
-        v = [(y, QQ(m(x, y))/mass_denominator) for y in relevant_verts]
-        return v
-        #return [(ym, mass) for (ym, mass) in v if mass > 0]
-    if verbose:
-        print "source mass: ", mass_vector(source)
-        print "target mass: ", mass_vector(target)
+    assert(problem.denom == sum(problem.m_src[z] for z in relevant_verts))
+    assert(problem.denom == sum(problem.m_tgt[z] for z in relevant_verts))
 
     # Set up linear program.
     p = MixedIntegerLinearProgram()
@@ -160,44 +54,149 @@ def ricci(walk, g, source=0, target=1, verbose=False):
     # Maximize the negative of the mass transport.
     p.set_objective(
         -p.sum(D[i, j]*a[i, j] for i in range(N) for j in range(N)))
-    tot_mass = 0
     # The equality constraints simply state that the mass starts in the places
     # it has diffused to from source...
     for i in range(N):
-        mass = m(source, relevant_verts[i])
-        tot_mass += mass
-        p.add_constraint(p.sum(a[i, j] for j in range(N)) == mass)
-    assert(tot_mass == mass_denominator)
-    tot_mass = 0
+        p.add_constraint(
+            p.sum(a[i, j] for j in range(N)) ==
+            problem.m_src[relevant_verts[i]])
     # and finishes in the places it has diffused to from target.
     for j in range(N):
-        mass = m(target, relevant_verts[j])
-        tot_mass += mass
-        p.add_constraint(p.sum(a[i, j] for i in range(N)) == mass)
-    assert(tot_mass == mass_denominator)
+        p.add_constraint(
+            p.sum(a[i, j] for i in range(N)) ==
+            problem.m_tgt[relevant_verts[j]])
 
     def relevant_vert_pair_labels(src, dst):
         return (relevant_verts[src], relevant_verts[dst])
 
     p.solve()
-    W1 = -QQ(p.solve())/mass_denominator
+    W1 = -QQ(p.solve())/problem.denom
     # Below D[0, 1] is Dist(source, target) by def of relevant_verts.
     kappa = 1 - W1/D[0, 1]
-    if walk == 'lazy_unif':  # Normalize out the laziness.
-        ric = QQ(kappa * pm2/pm1)
-    else:  # Nothing to normalize out.
-        ric = kappa
-    Result = namedtuple('Result',
-                        ['verts', 'coupling', 'dist', 'W1', 'kappa', 'ric'])
     return Result(
         verts=relevant_verts,
         coupling={
-            relevant_vert_pair_labels(*k): QQ(v/mass_denominator)
+            relevant_vert_pair_labels(*k): QQ(v/problem.denom)
             for (k, v) in p.get_values(a).items() if v > 0},
         dist=D[0, 1],
         W1=W1,
         kappa=kappa,
-        ric=ric)
+        ric=kappa)
+
+
+def careful_div(i, j):
+    """
+    Integer division, making sure that j divides i.
+    """
+    assert(i >= j and i % j == 0)
+    return int(i/j)
+
+
+def lazy_unif_mass(g, x, denom):
+    """
+    Under `lazy_unif`, we use the lazy random walk with probability of movement
+    pm=pm1/pm2 (expressed as rational to keep results rational) starting at x.
+    This mass distribution is reported as it would be when we multiply
+    everything by pm2/pm1.
+    Mass distribution at y (multiplied by denom) of one time-step of a
+    discrete lazy random walk starting at x.
+    This is (a multiple of a) random walk $m$ as defined in Ollivier's paper,
+    where it would be denoted $m_x(y)$.
+    """
+
+    m = [0] * g.order()
+    mass = careful_div(denom, g.degree(x))
+    for y in g.neighbor_iterator(x):
+        m[y] = mass
+    m[x] = denom - sum(m)
+    return m
+
+
+def unif_prior_mh_mass(g, x, denom):
+    """
+    One step from the MH process drawing from uniform distribution on nodes.
+    Mass transport from a vertex x works as follows: From x, propose a
+    uniform neighbor y. Uniform-prior MH ratio for proposing a move from x to
+    y is min[1, (g(y -> x) / g(x -> y))] In our case, g(y -> x) = 1/d(y) and
+    g(x -> y) = 1/d(x) giving MH ratio min[1, d(x) / d(y)]. Thus we always
+    move to a lower degree node, and sometimes to a higher. The amount of
+    mass moving from x to a neighboring y is
+    min[1, d(x) / d(y)] / d(x)  (*)
+    and the amount of mass that stays put is
+    1 - sum_z min[1, d(x) / d(z)] / d(x)
+    where z ranges over the neighbors of x.
+    """
+
+    m = [0] * g.order()
+    dx = g.degree(x)
+    for y in g.neighbor_iterator(x):
+        m[y] = careful_div(
+            min(denom, careful_div(dx*denom, g.degree(y))),
+            dx)
+    m[x] = denom - sum(m)
+    return m
+
+
+def ricci(walk, g, source=0, target=1, verbose=False):
+    """
+    Calculate the coarse Ollivier-Ricci curvature for vertices source and
+    target of graph g. There are two options: lazy_unif and unif_prior_mh.
+    For lazy_unif, the results are reported in an ordered tuple including
+    entries `kappa`,
+    which is the coarse Ricci curvature as defined in Ollivier (2009), and
+    `ric`, which is kappa divided by pm. This normalized version only depends
+    on the graph.
+    Under `unif_prior_mh`, we use the the Metropolis-Hastings setup for the
+    uniform prior on nodes. There are no free parameters, so in this case we
+    just take `ric` to be `kappa`.
+    """
+    ds = g.degree(source)
+    dt = g.degree(target)
+
+    if walk == 'lazy_unif':
+        # pm=pm1/pm2 is the probability of movement.
+        pm1 = 1
+        pm2 = 4
+        denom = pm2*ds*dt
+
+        problem = Problem(
+            src=source,
+            m_src=lazy_unif_mass(g, source, denom),
+            tgt=target,
+            m_tgt=lazy_unif_mass(g, target, denom),
+            denom=denom)
+
+    elif walk == 'unif_prior_mh':
+        # Let lcm = the least common multiple of degrees of the relevant nodes.
+        # Multiplying (*) above by ds*dt*lcm, we get the amount of mass moving
+        # from x to y as
+        # (ds * dt / d(x)) min[lcm, d(x) * lcm / d(y)],
+        # both terms of which are integral.
+
+        lcm = LCM(
+            [g.degree(z) for z in g.neighbor_iterator(source)] +
+            [g.degree(z) for z in g.neighbor_iterator(target)])
+        denom = ds*dt*lcm
+
+        problem = Problem(
+            src=source,
+            m_src=unif_prior_mh_mass(g, source, denom),
+            tgt=target,
+            m_tgt=unif_prior_mh_mass(g, target, denom),
+            denom=denom)
+
+    else:
+        assert(False)
+
+    if verbose:
+        print problem
+
+    result = ricci_gen(g, problem)
+
+    if walk == 'lazy_unif':  # Normalize out the laziness.
+        return result._replace(ric=QQ(result.kappa * pm2/pm1))
+
+    return result
 
 
 def ricci_list(walk, g, pair_list):
