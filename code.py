@@ -23,18 +23,22 @@ Problem = namedtuple(
 
 Result = namedtuple(
     'Result',
-    ['verts', 'coupling', 'dist', 'W1', 'kappa', 'ric'])
+    ['coupling',  # How mass gets moved about.
+     'dist',  # Distance between src and tgt.
+     'W1',  # Wasserstein distance between random walks.
+     'kappa',  # Coarse Ricci curvature as in Ollivier 2009.
+     'ric'  # Curvature potentially normalized by a factor.
+     ])
 
 
 def ricci_gen(g, problem):
-    # Use an OrderedDict to get uniques but preserve order.
-    d = OrderedDict.fromkeys(
-        [problem.src, problem.tgt] +
-        list(g.neighbor_iterator(problem.src)) +
-        list(g.neighbor_iterator(problem.tgt)))
     # relevant_verts will have unique items starting with source, then target,
     # then the neighbors of source and target.
-    relevant_verts = d.keys()
+    # Use an OrderedDict to get uniques but preserve order.
+    relevant_verts = OrderedDict.fromkeys(
+        [problem.src, problem.tgt] +
+        list(g.neighbor_iterator(problem.src)) +
+        list(g.neighbor_iterator(problem.tgt))).keys()
     N = len(relevant_verts)
     D = matrix(ZZ, N, N)
     for i in range(N):
@@ -43,6 +47,7 @@ def ricci_gen(g, problem):
             D[i, j] = dist
             D[j, i] = dist
 
+    # We multiply through by problem.denom, so this checks for unit mass:
     assert(problem.denom == sum(problem.m_src[z] for z in relevant_verts))
     assert(problem.denom == sum(problem.m_tgt[z] for z in relevant_verts))
 
@@ -69,18 +74,15 @@ def ricci_gen(g, problem):
             p.sum(a[i, j] for i in range(N)) ==
             problem.m_tgt[relevant_verts[j]])
 
-    def relevant_vert_pair_labels(src, dst):
-        return (relevant_verts[src], relevant_verts[dst])
-
     W1 = -QQ(p.solve())/problem.denom
-    # Below D[0, 1] is Dist(source, target) by def of relevant_verts.
-    kappa = 1 - W1/D[0, 1]
+
+    dist_src_tgt = D[0, 1]  # By def'n of relevant_verts.
+    kappa = 1 - W1/dist_src_tgt
     return Result(
-        verts=relevant_verts,
         coupling={
-            relevant_vert_pair_labels(*k): QQ(v/problem.denom)
-            for (k, v) in p.get_values(a).items() if v > 0},
-        dist=D[0, 1],
+            (relevant_verts[i], relevant_verts[j]): QQ(v/problem.denom)
+            for ((i, j), v) in p.get_values(a).items() if v > 0},
+        dist=dist_src_tgt,
         W1=W1,
         kappa=kappa,
         ric=kappa)
@@ -99,13 +101,9 @@ def lazy_unif_mass(g, x, denom, pm1, pm2):
     Under `lazy_unif`, we use the lazy random walk with probability of movement
     pm=pm1/pm2 (expressed as rational to keep results rational) starting at x.
     This mass distribution is reported as it would be when we multiply
-    everything by pm2/pm1.
-    Mass distribution at y (multiplied by denom) of one time-step of a
-    discrete lazy random walk starting at x.
-    This is (a multiple of a) random walk $m$ as defined in Ollivier's paper,
-    where it would be denoted $m_x(y)$.
+    everything by pm2/pm1. This is (a multiple of a) random walk $m$ as defined
+    in Ollivier's paper, where it would be denoted $m_x(y)$.
     """
-
     m = [0] * g.order()
     mass = careful_div(denom*pm1, g.degree(x)*pm2)
     for y in g.neighbor_iterator(x):
@@ -128,7 +126,6 @@ def unif_prior_mh_mass(g, x, denom):
     1 - sum_z min[1, d(x) / d(z)] / d(x)
     where z ranges over the neighbors of x.
     """
-
     m = [0] * g.order()
     dx = g.degree(x)
     for y in g.neighbor_iterator(x):
@@ -144,19 +141,19 @@ def ricci(walk, g, source=0, target=1, verbose=False):
     Calculate the coarse Ollivier-Ricci curvature for vertices source and
     target of graph g. There are two options: lazy_unif and unif_prior_mh.
     For lazy_unif, the results are reported in an ordered tuple including
-    entries `kappa`,
-    which is the coarse Ricci curvature as defined in Ollivier (2009), and
-    `ric`, which is kappa divided by pm. This normalized version only depends
-    on the graph.
-    Under `unif_prior_mh`, we use the the Metropolis-Hastings setup for the
-    uniform prior on nodes. There are no free parameters, so in this case we
-    just take `ric` to be `kappa`.
+    entries `kappa`, which is the coarse Ricci curvature as defined in Ollivier
+    (2009), and `ric`, which is kappa divided by the probability of movement.
+    This normalized version only depends on the graph. Under `unif_prior_mh`,
+    we use the the Metropolis-Hastings setup for the uniform prior on nodes.
+    There are no free parameters, so in this case we just take `ric` to be
+    `kappa`.
     """
     ds = g.degree(source)
     dt = g.degree(target)
 
     if walk == 'lazy_unif':
         # pm=pm1/pm2 is the probability of movement.
+        # Here we take 1/4, but we just have to be < 1.
         pm1 = 1
         pm2 = 4
         denom = pm2*ds*dt
@@ -173,7 +170,7 @@ def ricci(walk, g, source=0, target=1, verbose=False):
         # Multiplying (*) above by ds*dt*lcm, we get the amount of mass moving
         # from x to y as
         # (ds * dt / d(x)) min[lcm, d(x) * lcm / d(y)],
-        # both terms of which are integral.
+        # both terms of which are integral (recall x is either src or tgt).
 
         lcm = LCM(
             [g.degree(z) for z in g.neighbor_iterator(source)] +
