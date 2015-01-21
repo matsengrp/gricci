@@ -16,7 +16,10 @@ from collections import OrderedDict, namedtuple
 
 Problem = namedtuple(
     'Problem',
-    ['src', 'm_src', 'tgt', 'm_tgt', 'denom'])
+    ['src', 'm_src',  # Source node and mass distribution.
+     'tgt', 'm_tgt',  # Target node and mass distribution.
+     'denom'  # A denominator: multiplying by this makes everything integral.
+     ])
 
 Result = namedtuple(
     'Result',
@@ -69,7 +72,6 @@ def ricci_gen(g, problem):
     def relevant_vert_pair_labels(src, dst):
         return (relevant_verts[src], relevant_verts[dst])
 
-    p.solve()
     W1 = -QQ(p.solve())/problem.denom
     # Below D[0, 1] is Dist(source, target) by def of relevant_verts.
     kappa = 1 - W1/D[0, 1]
@@ -92,7 +94,7 @@ def careful_div(i, j):
     return int(i/j)
 
 
-def lazy_unif_mass(g, x, denom):
+def lazy_unif_mass(g, x, denom, pm1, pm2):
     """
     Under `lazy_unif`, we use the lazy random walk with probability of movement
     pm=pm1/pm2 (expressed as rational to keep results rational) starting at x.
@@ -105,7 +107,7 @@ def lazy_unif_mass(g, x, denom):
     """
 
     m = [0] * g.order()
-    mass = careful_div(denom, g.degree(x))
+    mass = careful_div(denom*pm1, g.degree(x)*pm2)
     for y in g.neighbor_iterator(x):
         m[y] = mass
     m[x] = denom - sum(m)
@@ -161,9 +163,9 @@ def ricci(walk, g, source=0, target=1, verbose=False):
 
         problem = Problem(
             src=source,
-            m_src=lazy_unif_mass(g, source, denom),
+            m_src=lazy_unif_mass(g, source, denom, pm1, pm2),
             tgt=target,
-            m_tgt=lazy_unif_mass(g, target, denom),
+            m_tgt=lazy_unif_mass(g, target, denom, pm1, pm2),
             denom=denom)
 
     elif walk == 'unif_prior_mh':
