@@ -96,9 +96,9 @@ def careful_div(i, j):
     return int(i/j)
 
 
-def lazy_unif_mass(g, x, denom, pm1, pm2):
+def lurw_mass(g, x, denom, pm1, pm2):
     """
-    Under `lazy_unif`, we use the lazy random walk with probability of movement
+    Under `lurw`, we use the lazy random walk with probability of movement
     pm=pm1/pm2 (expressed as rational to keep results rational) starting at x.
     This mass distribution is reported as it would be when we multiply
     everything by pm2/pm1. This is (a multiple of a) random walk $m$ as defined
@@ -112,9 +112,9 @@ def lazy_unif_mass(g, x, denom, pm1, pm2):
     return m
 
 
-def unif_prior_mh_mass(g, x, denom):
+def upmh_mass(g, x, denom):
     """
-    One step from the MH process drawing from uniform distribution on nodes.
+    One step from the MH process drawing from uniform distribution on vertices.
     Mass transport from a vertex x works as follows: From x, propose a
     uniform neighbor y. Uniform-prior MH ratio for proposing a move from x to
     y is min[1, (g(y -> x) / g(x -> y))] In our case, g(y -> x) = 1/d(y) and
@@ -139,11 +139,11 @@ def unif_prior_mh_mass(g, x, denom):
 def ricci(walk, g, source=0, target=1, verbose=False):
     """
     Calculate the coarse Ollivier-Ricci curvature for vertices source and
-    target of graph g. There are two options: lazy_unif and unif_prior_mh.
-    For lazy_unif, the results are reported in an ordered tuple including
+    target of graph g. There are two options: lurw and upmh.
+    For lurw, the results are reported in an ordered tuple including
     entries `kappa`, which is the coarse Ricci curvature as defined in Ollivier
     (2009), and `ric`, which is kappa divided by the probability of movement.
-    This normalized version only depends on the graph. Under `unif_prior_mh`,
+    This normalized version only depends on the graph. Under `upmh`,
     we use the the Metropolis-Hastings setup for the uniform prior on nodes.
     There are no free parameters, so in this case we just take `ric` to be
     `kappa`.
@@ -151,7 +151,7 @@ def ricci(walk, g, source=0, target=1, verbose=False):
     ds = g.degree(source)
     dt = g.degree(target)
 
-    if walk == 'lazy_unif':
+    if walk == 'lurw':
         # pm=pm1/pm2 is the probability of movement.
         # Here we take 1/4, but we just have to be < 1.
         pm1 = 1
@@ -160,12 +160,12 @@ def ricci(walk, g, source=0, target=1, verbose=False):
 
         problem = Problem(
             src=source,
-            m_src=lazy_unif_mass(g, source, denom, pm1, pm2),
+            m_src=lurw_mass(g, source, denom, pm1, pm2),
             tgt=target,
-            m_tgt=lazy_unif_mass(g, target, denom, pm1, pm2),
+            m_tgt=lurw_mass(g, target, denom, pm1, pm2),
             denom=denom)
 
-    elif walk == 'unif_prior_mh':
+    elif walk == 'upmh':
         # Let lcm = the least common multiple of degrees of the relevant nodes.
         # Multiplying (*) above by ds*dt*lcm, we get the amount of mass moving
         # from x to y as
@@ -179,9 +179,9 @@ def ricci(walk, g, source=0, target=1, verbose=False):
 
         problem = Problem(
             src=source,
-            m_src=unif_prior_mh_mass(g, source, denom),
+            m_src=upmh_mass(g, source, denom),
             tgt=target,
-            m_tgt=unif_prior_mh_mass(g, target, denom),
+            m_tgt=upmh_mass(g, target, denom),
             denom=denom)
 
     else:
@@ -192,7 +192,7 @@ def ricci(walk, g, source=0, target=1, verbose=False):
 
     result = ricci_gen(g, problem)
 
-    if walk == 'lazy_unif':  # Normalize out the laziness.
+    if walk == 'lurw':  # Normalize out the laziness.
         return result._replace(ric=QQ(result.kappa * pm2/pm1))
 
     return result
