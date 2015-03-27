@@ -18,4 +18,7 @@ git submodule update
 and run the IPython notebook in the `gricci` directory.
 
 
+[![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.16428.svg)](http://dx.doi.org/10.5281/zenodo.16428)
+
+
 [1]: http://dx.doi.org/10.1016/j.jfa.2008.11.001 "Ollivier, Y. Ricci curvature of Markov chains on metric spaces. J. Funct. Anal. 256, 810–864 (2009)."
